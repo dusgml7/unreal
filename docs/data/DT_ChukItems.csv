@@ -1,0 +1,9 @@
+﻿---,DisplayName,Icon,Effect,EffectAmount,MaxUses,bApplyOnPickup
+Fan,"부채",None,RecoverFear,20,5,False
+Bell,"방울",None,RecoverSanity,15,7,False
+Talisman,"부적",None,RecoverSanity,30,3,False
+Lantern,"등불",None,Lantern,0,0,False
+OilLamp,"등잔",None,RelightLantern,0,1,False
+Diary,"일기",None,Diary,0,0,False
+DeadMouse,"쥐 사체",None,WorsenSanity,15,1,True
+StrawDoll,"제웅",None,WorsenSanity,20,1,True
