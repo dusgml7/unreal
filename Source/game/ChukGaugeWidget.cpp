@@ -35,17 +35,17 @@ void UChukGaugeWidget::BindToGauge(UChukGaugeComponent* Gauge)
 
 void UChukGaugeWidget::HandleFearChanged(float NewValue)
 {
-	if (FearBar)
+	if (gauge_fear)
 	{
-		FearBar->SetPercent(NewValue / UChukGaugeComponent::MaxGaugeValue);
+		gauge_fear->SetPercent(NewValue / UChukGaugeComponent::MaxGaugeValue);
 	}
 }
 
 void UChukGaugeWidget::HandleSanityChanged(float NewValue)
 {
-	if (SanityBar)
+	if (gauge_mentality)
 	{
-		SanityBar->SetPercent(NewValue / UChukGaugeComponent::MaxGaugeValue);
+		gauge_mentality->SetPercent(NewValue / UChukGaugeComponent::MaxGaugeValue);
 	}
 }
 

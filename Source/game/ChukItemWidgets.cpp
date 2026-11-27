@@ -13,9 +13,10 @@
 void UChukItemSlotWidget::SetupSlot(FName InItemId, const FChukItemData& Data)
 {
 	ItemId = InItemId;
-	if (IconImage && Data.Icon)
+	MaxUsesPerItem = Data.MaxUses;
+	if (item_icon && Data.Icon)
 	{
-		IconImage->SetBrushFromTexture(Data.Icon);
+		item_icon->SetBrushFromTexture(Data.Icon);
 	}
 	SetToolTipText(Data.DisplayName);
 }
@@ -24,11 +25,22 @@ void UChukItemSlotWidget::UpdateSlot(int32 Remaining, bool bActive)
 {
 	SetRenderOpacity(bActive ? ActiveOpacity : InactiveOpacity);
 
-	if (UsesText)
+	if (item_count)
 	{
-		UsesText->SetText(Remaining < 0 ? UnlimitedText : FText::AsNumber(Remaining));
+		// 1회용 아이템(등잔)은 남은 횟수 = 가진 개수. 1개일 때는 숫자 숨김
+		const bool bHide = bHideCountWhenOne && MaxUsesPerItem == 1 && Remaining == 1;
+		item_count->SetText(Remaining < 0 ? UnlimitedText : (bHide ? FText::GetEmpty() : FText::AsNumber(Remaining)));
 	}
 	OnSlotStateChanged(bActive, Remaining);
+}
+
+void UChukItemSlotWidget::SetHeld(bool bHeld)
+{
+	if (item_held)
+	{
+		item_held->SetVisibility(bHeld ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+	}
+	OnHeldStateChanged(bHeld);
 }
 
 // ===================== UChukItemBarWidget =====================
@@ -39,13 +51,14 @@ void UChukItemBarWidget::BindToInventory(UChukInventoryComponent* Inventory)
 	{
 		Old->OnItemAdded.RemoveDynamic(this, &UChukItemBarWidget::HandleItemAdded);
 		Old->OnItemUsesChanged.RemoveDynamic(this, &UChukItemBarWidget::HandleItemUsesChanged);
+		Old->OnHeldItemChanged.RemoveDynamic(this, &UChukItemBarWidget::HandleHeldItemChanged);
 	}
 
 	BoundInventory = Inventory;
 	SlotWidgets.Reset();
-	if (SlotContainer)
+	if (item_slots)
 	{
-		SlotContainer->ClearChildren();
+		item_slots->ClearChildren();
 	}
 	if (!Inventory)
 	{
@@ -54,16 +67,14 @@ void UChukItemBarWidget::BindToInventory(UChukInventoryComponent* Inventory)
 
 	Inventory->OnItemAdded.AddDynamic(this, &UChukItemBarWidget::HandleItemAdded);
 	Inventory->OnItemUsesChanged.AddDynamic(this, &UChukItemBarWidget::HandleItemUsesChanged);
+	Inventory->OnHeldItemChanged.AddDynamic(this, &UChukItemBarWidget::HandleHeldItemChanged);
 
-	// 고정 순서 칸 먼저, 그다음 이미 가진 아이템
-	for (const FName& Id : FixedItemOrder)
-	{
-		RefreshSlot(Id);
-	}
+	// 인벤토리에 들어온 순서대로 칸 생성
 	for (const FChukInventorySlot& OwnedSlot : Inventory->GetSlots())
 	{
 		RefreshSlot(OwnedSlot.ItemId);
 	}
+	HandleHeldItemChanged(Inventory->GetHeldItem());
 }
 
 UChukItemSlotWidget* UChukItemBarWidget::FindOrCreateSlot(FName ItemId)
@@ -75,12 +86,12 @@ UChukItemSlotWidget* UChukItemBarWidget::FindOrCreateSlot(FName ItemId)
 
 	UChukInventoryComponent* Inventory = BoundInventory.Get();
 	FChukItemData Data;
-	if (!SlotWidgetClass || !SlotContainer || !Inventory || !Inventory->GetItemData(ItemId, Data))
+	if (!SlotWidgetClass || !item_slots || !Inventory || !Inventory->GetItemData(ItemId, Data))
 	{
 		return nullptr;
 	}
-	// 일기·줍는 즉시 적용 아이템은 칸을 만들지 않음
-	if (Data.Effect == EChukItemEffect::Diary || Data.bApplyOnPickup)
+	// 줍는 즉시 적용 아이템(쥐 사체, 제웅)은 인벤토리에 남지 않으므로 칸을 만들지 않음
+	if (Data.bApplyOnPickup)
 	{
 		return nullptr;
 	}
@@ -91,7 +102,8 @@ UChukItemSlotWidget* UChukItemBarWidget::FindOrCreateSlot(FName ItemId)
 		return nullptr;
 	}
 	NewSlot->SetupSlot(ItemId, Data);
-	SlotContainer->AddChild(NewSlot);
+	NewSlot->SetHeld(Inventory->GetHeldItem() == ItemId);
+	item_slots->AddChild(NewSlot);
 	SlotWidgets.Add(ItemId, NewSlot);
 	return NewSlot;
 }
@@ -116,4 +128,15 @@ void UChukItemBarWidget::HandleItemAdded(FName ItemId)
 void UChukItemBarWidget::HandleItemUsesChanged(FName ItemId, int32 Remaining)
 {
 	RefreshSlot(ItemId);
+}
+
+void UChukItemBarWidget::HandleHeldItemChanged(FName ItemId)
+{
+	for (const TPair<FName, TObjectPtr<UChukItemSlotWidget>>& Pair : SlotWidgets)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->SetHeld(Pair.Key == ItemId);
+		}
+	}
 }

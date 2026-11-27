@@ -5,7 +5,10 @@
 #include "ChukHideComponent.h"
 #include "Components/ArrowComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
+#include "Kismet/GameplayStatics.h"
 
 AChukHideSpot::AChukHideSpot()
 {
@@ -15,6 +18,11 @@ AChukHideSpot::AChukHideSpot()
 
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	Mesh->SetupAttachment(RootComponent);
+
+	SkeletalMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMesh"));
+	SkeletalMesh->SetupAttachment(RootComponent);
+	// E 키 판정(Visibility 트레이스)에 걸리도록 충돌을 켠다 (Physics Asset 모양 사용)
+	SkeletalMesh->SetCollisionProfileName(UCollisionProfile::BlockAllDynamic_ProfileName);
 
 	HidePoint = CreateDefaultSubobject<UArrowComponent>(TEXT("HidePoint"));
 	HidePoint->SetupAttachment(RootComponent);
@@ -90,4 +98,30 @@ void AChukHideSpot::Interact_Implementation(AActor* InteractingActor)
 	{
 		Hide->EnterHideSpot(this);
 	}
+}
+
+void AChukHideSpot::NotifyPlayerEntered(AActor* Player)
+{
+	if (EnterAnimation && SkeletalMesh && SkeletalMesh->GetSkeletalMeshAsset())
+	{
+		SkeletalMesh->PlayAnimation(EnterAnimation, false); // 끝나면 마지막 자세로 멈춤
+	}
+	if (EnterSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, EnterSound, GetActorLocation());
+	}
+	OnPlayerEntered(Player);
+}
+
+void AChukHideSpot::NotifyPlayerExited(AActor* Player)
+{
+	if (ExitAnimation && SkeletalMesh && SkeletalMesh->GetSkeletalMeshAsset())
+	{
+		SkeletalMesh->PlayAnimation(ExitAnimation, false);
+	}
+	if (ExitSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ExitSound, GetActorLocation());
+	}
+	OnPlayerExited(Player);
 }

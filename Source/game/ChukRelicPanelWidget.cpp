@@ -39,10 +39,10 @@ UImage* UChukRelicPanelWidget::GetImageFor(EChukRelicType Relic) const
 {
 	switch (Relic)
 	{
-	case EChukRelicType::Kkotsin:	return KkotsinImage;
-	case EChukRelicType::Norigae:	return NorigaeImage;
-	case EChukRelicType::Daenggi:	return DaenggiImage;
-	case EChukRelicType::Binyeo:	return BinyeoImage;
+	case EChukRelicType::Kkotsin:	return relic_kkotsin;
+	case EChukRelicType::Norigae:	return relic_norigae;
+	case EChukRelicType::Daenggi:	return relic_daenggi;
+	case EChukRelicType::Binyeo:	return relic_binyeo;
 	default:						return nullptr;
 	}
 }

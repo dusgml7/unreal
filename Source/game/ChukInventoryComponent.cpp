@@ -4,6 +4,7 @@
 
 #include "ChukGaugeComponent.h"
 #include "Engine/DataTable.h"
+#include "Engine/Engine.h"
 
 UChukInventoryComponent::UChukInventoryComponent()
 {
@@ -24,6 +25,11 @@ void UChukInventoryComponent::BeginPlay()
 		AcquireItem(ItemId);
 	}
 
+	if (!SetHeldItem(StartingHeldItem) && Slots.Num() > 0)
+	{
+		SetHeldItem(Slots[0].ItemId);
+	}
+
 	LanternRemainingTime = bLanternLitAtStart ? LanternDuration : 0.f;
 }
 
@@ -31,7 +37,8 @@ void UChukInventoryComponent::TickComponent(float DeltaTime, ELevelTick TickType
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (LanternRemainingTime > 0.f)
+	// 기획 확정: 등불은 손에 들고 있을 때만 기름(시간)이 줄어든다. 안 들면 멈춤
+	if (LanternRemainingTime > 0.f && IsHoldingLantern())
 	{
 		LanternRemainingTime -= DeltaTime;
 		if (LanternRemainingTime <= 0.f)
@@ -39,6 +46,19 @@ void UChukInventoryComponent::TickComponent(float DeltaTime, ELevelTick TickType
 			LanternRemainingTime = 0.f;
 			OnLanternExtinguished.Broadcast();
 		}
+	}
+
+	if (bShowDebugText && GEngine)
+	{
+		FString Text = FString::Printf(TEXT("[Inventory] Held: %s   Lantern: %.0fs (%s)\n"), *HeldItemId.ToString(), LanternRemainingTime,
+			IsHoldingLantern() ? TEXT("light ON") : TEXT("light OFF"));
+		for (const FChukInventorySlot& S : Slots)
+		{
+			const int32 Remaining = GetRemainingUses(S.ItemId);
+			Text += FString::Printf(TEXT("%s%s: %s   "), S.ItemId == HeldItemId ? TEXT(">") : TEXT(""),
+				*S.ItemId.ToString(), Remaining < 0 ? TEXT("inf") : *FString::FromInt(Remaining));
+		}
+		GEngine->AddOnScreenDebugMessage(static_cast<uint64>(GetUniqueID()), 0.f, FColor::Cyan, Text);
 	}
 }
 
@@ -49,6 +69,12 @@ bool UChukInventoryComponent::UseItem(FName ItemId)
 	const FChukItemData* Data = FindItemData(ItemId);
 	FChukInventorySlot* Slot = FindSlot(ItemId);
 	if (!Data || !Slot)
+	{
+		return false;
+	}
+
+	// 기획 확정: 등불은 들고 R 을 눌러도 아무 일 없음 (들고 있기만 하면 빛남)
+	if (Data->Effect == EChukItemEffect::Lantern)
 	{
 		return false;
 	}
@@ -73,6 +99,12 @@ bool UChukInventoryComponent::UseItem(FName ItemId)
 		OnItemUsesChanged.Broadcast(ItemId, Slot->RemainingUses);
 	}
 	OnItemUsed.Broadcast(ItemId);
+
+	// 일기: 아이템 창에서 사용하면 다시 읽기
+	if (Data->Effect == EChukItemEffect::Diary)
+	{
+		OnDiaryRead.Broadcast(ItemId);
+	}
 	return true;
 }
 
@@ -93,11 +125,10 @@ bool UChukInventoryComponent::AcquireItem(FName ItemId)
 		return true;
 	}
 
-	// 일기: 인벤토리에 넣지 않음
-	if (Data->Effect == EChukItemEffect::Diary)
+	// 일기: 인벤토리에 넣고, 설정에 따라 주운 순간 바로 읽기
+	if (Data->Effect == EChukItemEffect::Diary && bReadDiaryOnPickup)
 	{
 		OnDiaryRead.Broadcast(ItemId);
-		return true;
 	}
 
 	if (FChukInventorySlot* Existing = FindSlot(ItemId))
@@ -180,12 +211,57 @@ bool UChukInventoryComponent::GetItemData(FName ItemId, FChukItemData& OutData) 
 	return false;
 }
 
+// ===================== 손에 든 아이템 =====================
+
+bool UChukInventoryComponent::SetHeldItem(FName ItemId)
+{
+	if (!HasItem(ItemId))
+	{
+		return false;
+	}
+	if (HeldItemId != ItemId)
+	{
+		HeldItemId = ItemId;
+		OnHeldItemChanged.Broadcast(HeldItemId);
+	}
+	return true;
+}
+
+bool UChukInventoryComponent::SelectHeldItemByIndex(int32 Index)
+{
+	return Slots.IsValidIndex(Index) && SetHeldItem(Slots[Index].ItemId);
+}
+
+void UChukInventoryComponent::CycleHeldItem(int32 Direction)
+{
+	if (Slots.Num() == 0 || Direction == 0)
+	{
+		return;
+	}
+	// TODO(기획 확인): 다 쓴(횟수 0) 아이템도 휠로 고를 수 있는지 (지금은 고를 수 있고, 사용만 안 됨)
+	const int32 Current = Slots.IndexOfByPredicate([this](const FChukInventorySlot& S) { return S.ItemId == HeldItemId; });
+	const int32 Step = Direction > 0 ? 1 : -1;
+	const int32 Next = Current == INDEX_NONE ? 0 : (Current + Step + Slots.Num()) % Slots.Num();
+	SetHeldItem(Slots[Next].ItemId);
+}
+
+bool UChukInventoryComponent::UseHeldItem()
+{
+	return !HeldItemId.IsNone() && UseItem(HeldItemId);
+}
+
 // ===================== 등불 =====================
 
 float UChukInventoryComponent::GetLanternIntensity01() const
 {
 	// TODO(기획 확인): 밝기가 줄어드는 방식 (지금은 시간에 비례해 일정하게 줄어듦)
 	return LanternDuration > 0.f ? FMath::Clamp(LanternRemainingTime / LanternDuration, 0.f, 1.f) : 0.f;
+}
+
+bool UChukInventoryComponent::IsHoldingLantern() const
+{
+	const FChukItemData* Data = FindItemData(HeldItemId);
+	return Data && Data->Effect == EChukItemEffect::Lantern;
 }
 
 void UChukInventoryComponent::RelightLantern()

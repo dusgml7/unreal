@@ -8,7 +8,7 @@
 #include "ChukRelicSubsystem.h"
 #include "ChukRelicPickup.generated.h"
 
-class USphereComponent;
+class UCapsuleComponent;
 class UStaticMeshComponent;
 
 /**
@@ -35,9 +35,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Relic")
 	EChukRelicType RelicType = EChukRelicType::Kkotsin;
 
-	/** 상호작용 판정용 구 */
+	/** 상호작용 판정용 캡슐. Shape 에서 Capsule Half Height(세로), Capsule Radius(가로) 조절 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chuk|Relic")
-	TObjectPtr<USphereComponent> InteractCollision;
+	TObjectPtr<UCapsuleComponent> InteractCollision;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chuk|Relic")
 	TObjectPtr<UStaticMeshComponent> Mesh;

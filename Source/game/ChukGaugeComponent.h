@@ -38,6 +38,11 @@ struct FChukGaugeSoundSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	EChukGaugeType LinkedGauge = EChukGaugeType::None;
 
+	/** 소리가 나기 시작하는 게이지 값. 공포는 이 값 "이상", 정신력은 이 값 "이하"일 때만 소리가 난다.
+	 *  그 범위 안에서 볼륨·빠르기는 아래 단계별 값을 따른다. -1 = 기준값 없이 단계 볼륨만 사용 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	float StartValue = -1.f;
+
 	/** 단계별 볼륨 배율 (0 = 재생 안 함) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	TArray<float> VolumeByStage = { 0.f, 0.4f, 0.7f, 1.0f };
@@ -91,6 +96,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Fear", meta = (ClampMin = "0"))
 	float FearRisePerSecond = 10.f;
 
+	/** 등불이 다 꺼졌을 때 자매를 볼 때 공포 상승 속도 배율 (Chuk Inventory 의 등불 기준) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Fear", meta = (ClampMin = "1"))
+	float DarkFearRiseMultiplier = 1.5f;
+
 	/** 직시를 시작하고 이 시간(초)이 지난 뒤부터 공포가 오른다. 0이면 보자마자 오름 */
 	// TODO(기획 확인): "일정 시간 직시" 의 일정 시간
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Fear", meta = (ClampMin = "0"))
@@ -127,6 +136,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Sanity", meta = (ClampMin = "0"))
 	float SanityDrainPerSecond = 5.f;
 
+	/** 등불이 다 꺼졌을 때 자매 소리를 들을 때 정신력 감소 속도 배율 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Sanity", meta = (ClampMin = "1"))
+	float DarkSanityDrainMultiplier = 1.5f;
+
+	// ===================== 어둠 =====================
+	// 등불이 다 꺼져 있으면 자매가 없어도 Darkness Tick Interval 초마다 정신력 -Loss, 공포 +Gain.
+	// 등잔으로 다시 켜면 멈추고, 시간은 처음부터 다시 센다. 은신처에 숨어 있는 동안은 적용되지 않는다.
+
+	/** 어둠 속에서 몇 초마다 게이지가 변하는지 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Darkness", meta = (ClampMin = "0.1"))
+	float DarknessTickInterval = 3.5f;
+
+	/** 한 번에 줄어드는 정신력 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Darkness", meta = (ClampMin = "0"))
+	float DarknessSanityLoss = 1.f;
+
+	/** 한 번에 오르는 공포 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Darkness", meta = (ClampMin = "0"))
+	float DarknessFearGain = 1.f;
+
 	/** 소리를 듣기 시작하고 이 시간(초)이 지난 뒤부터 정신력이 내려간다. 0이면 바로 내려감 */
 	// TODO(기획 확인): "일정 시간 들으면" 의 일정 시간
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Sanity", meta = (ClampMin = "0"))
@@ -149,9 +178,35 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Sanity")
 	TArray<float> SanitySpeedMultipliers = { 1.0f, 0.85f, 0.7f, 0.5f };
 
-	/** 켜 두면 이 컴포넌트가 캐릭터의 걷기 속도(Max Walk Speed)를 직접 바꾼다 */
+	/** 켜 두면 이 컴포넌트가 캐릭터의 걷기 속도(Max Walk Speed)를 직접 바꾼다 (달리기 포함).
+	 *  끄면 달리기·정신력 감속 모두 적용되지 않는다 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Sanity")
 	bool bApplySpeedToCharacter = true;
+
+	// ===================== 달리기 =====================
+	// 달리기도 걷기 속도를 바꾸므로, 정신력 감속과 충돌하지 않도록 이 컴포넌트에서 함께 계산한다.
+	// 최종 속도 = 원래 걷기 속도 × (달리는 중이면 Run Speed Multiplier) × 정신력 단계 배율
+	// 키(기본 왼쪽 Shift)는 AChukPlayerController 가 Set Running 으로 연결한다.
+
+	/** 달릴 때 걷기 속도의 몇 배인지 */
+	// 기본 2.5 = 걷기 200 × 2.5 = 500 → BS_Locomotion 의 달리기(run) 위치와 맞춤 (중간 속도면 걷기·달리기가 섞여 버벅임)
+	// TODO(기획 확인): 달리기 속도
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Run", meta = (ClampMin = "1"))
+	float RunSpeedMultiplier = 2.5f;
+
+	/** 정신력이 이 값 미만이면 달릴 수 없다 (Shift 를 눌러도 걷기). 0 = 정신력과 상관없이 항상 달릴 수 있음 (기획 결정 2026-11-27) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Run", meta = (ClampMin = "0", ClampMax = "100"))
+	float RunDisabledSanityThreshold = 0.f;
+	// TODO(기획 확인): 달리기에 스태미나 제한이 있는지, 달리면 자매가 소리를 듣는지
+
+	// ===================== 웅크리기 =====================
+	// 키(기본 왼쪽 Ctrl)는 AChukPlayerController 가 캐릭터의 Crouch / Un Crouch 로 연결한다.
+	// 애니메이션 블루프린트에서는 캐릭터의 "Is Crouched" 값을 읽어 웅크리기 동작으로 바꾸면 된다.
+
+	/** 웅크려 걸을 때 걷기 속도의 몇 배인지 (정신력 감속도 같이 곱해짐) */
+	// TODO(기획 확인): 웅크리기 이동 속도, 웅크리면 자매에게 덜 들키는지
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Crouch", meta = (ClampMin = "0"))
+	float CrouchSpeedMultiplier = 0.5f;
 
 	// ===================== 사운드 =====================
 
@@ -236,9 +291,25 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Chuk|Gauge")
 	int32 GetSanityStage() const { return SanityStage; }
 
-	/** 지금 적용 중인 이동 속도 배율 */
+	/** 지금 적용 중인 이동 속도 배율 (정신력 단계에 따른 감속만. 달리기 제외) */
 	UFUNCTION(BlueprintPure, Category = "Chuk|Gauge")
 	float GetSpeedMultiplier() const;
+
+	/** 달리기 켜기/끄기 (Shift 누름/뗌) */
+	UFUNCTION(BlueprintCallable, Category = "Chuk|Run")
+	void SetRunning(bool bRun);
+
+	/** 실제로 달리고 있는지 (Shift 를 누르고 있고 + 달릴 수 있는 상태) */
+	UFUNCTION(BlueprintPure, Category = "Chuk|Run")
+	bool IsRunning() const { return bRunning && CanRun(); }
+
+	/** 지금 정신력으로 달릴 수 있는지 (정신력 > Run Disabled Sanity Threshold). UI 에서 달리기 불가 표시용 */
+	UFUNCTION(BlueprintPure, Category = "Chuk|Run")
+	bool CanRun() const { return RunDisabledSanityThreshold <= 0.f || Sanity >= RunDisabledSanityThreshold; }
+
+	/** 등불이 다 꺼진 상태인지 (같은 캐릭터의 Chuk Inventory 기준). 꺼져 있으면 공포·정신력 변화가 빨라짐 */
+	UFUNCTION(BlueprintPure, Category = "Chuk|Gauge")
+	bool IsInDarkness() const;
 
 	/** 이번 프레임에 자매를 직시하고 있는지 */
 	UFUNCTION(BlueprintPure, Category = "Chuk|Gauge")
@@ -289,6 +360,11 @@ private:
 
 	// 캐릭터 원래 걷기 속도
 	float BaseWalkSpeed = -1.f;
+
+	bool bRunning = false;
+
+	// 어둠 속에 있은 시간 (Darkness Tick Interval 마다 초기화)
+	float DarknessTime = 0.f;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UAudioComponent> HeartbeatAudio;

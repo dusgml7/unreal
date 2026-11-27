@@ -2,6 +2,8 @@
 
 #include "ChukGaugeComponent.h"
 
+#include "ChukHideComponent.h"
+#include "ChukInventoryComponent.h"
 #include "ChukSisterBase.h"
 #include "Components/AudioComponent.h"
 #include "Engine/Engine.h"
@@ -30,10 +32,11 @@ UChukGaugeComponent::UChukGaugeComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 
-	// 기본 연결: 공포 → 심장 소리, 정신력 → 숨소리
-	// TODO(기획 확인): 어떤 게이지에 어떤 소리를 붙일지
+	// 기획 확정: 공포 50 이상 → 심장 소리, 정신력 50 이하 → 헉헉 숨소리
 	HeartbeatSound.LinkedGauge = EChukGaugeType::Fear;
+	HeartbeatSound.StartValue = 50.f;
 	BreathSound.LinkedGauge = EChukGaugeType::Sanity;
+	BreathSound.StartValue = 50.f;
 }
 
 void UChukGaugeComponent::BeginPlay()
@@ -112,7 +115,7 @@ void UChukGaugeComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		LookTime += DeltaTime;
 		if (LookTime >= GazeTimeBeforeFearRise)
 		{
-			SetFearInternal(Fear + FearRisePerSecond * DeltaTime);
+			SetFearInternal(Fear + FearRisePerSecond * (IsInDarkness() ? DarkFearRiseMultiplier : 1.f) * DeltaTime);
 		}
 	}
 	else
@@ -130,7 +133,7 @@ void UChukGaugeComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		HearTime += DeltaTime;
 		if (HearTime >= HearTimeBeforeSanityDrain)
 		{
-			SetSanityInternal(Sanity - SanityDrainPerSecond * DeltaTime);
+			SetSanityInternal(Sanity - SanityDrainPerSecond * (IsInDarkness() ? DarkSanityDrainMultiplier : 1.f) * DeltaTime);
 		}
 	}
 	else
@@ -140,6 +143,25 @@ void UChukGaugeComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		{
 			SetSanityInternal(Sanity + SanityRecoveryPerSecond * DeltaTime);
 		}
+	}
+
+	// 4) 어둠 (등불이 다 꺼짐): 자매가 없어도 일정 간격마다 정신력 감소 + 공포 증가
+	//    은신처에 숨어 있는 동안은 적용 안 함 (기획 확정)
+	const UChukHideComponent* Hide = GetOwner() ? GetOwner()->FindComponentByClass<UChukHideComponent>() : nullptr;
+	const bool bHiding = Hide && Hide->IsHiding();
+	if (IsInDarkness() && !bHiding && DarknessTickInterval > 0.f)
+	{
+		DarknessTime += DeltaTime;
+		while (DarknessTime >= DarknessTickInterval)
+		{
+			DarknessTime -= DarknessTickInterval;
+			SetSanityInternal(Sanity - DarknessSanityLoss);
+			SetFearInternal(Fear + DarknessFearGain);
+		}
+	}
+	else
+	{
+		DarknessTime = 0.f; // 등불을 다시 켜면 처음부터 다시 셈
 	}
 
 	if (bShowDebugText)
@@ -158,6 +180,21 @@ void UChukGaugeComponent::AddFear(float Amount)
 void UChukGaugeComponent::AddSanity(float Amount)
 {
 	SetSanityInternal(Sanity + Amount);
+}
+
+bool UChukGaugeComponent::IsInDarkness() const
+{
+	const UChukInventoryComponent* Inventory = GetOwner() ? GetOwner()->FindComponentByClass<UChukInventoryComponent>() : nullptr;
+	return Inventory && !Inventory->IsLanternLit();
+}
+
+void UChukGaugeComponent::SetRunning(bool bRun)
+{
+	if (bRunning != bRun)
+	{
+		bRunning = bRun;
+		ApplySpeed();
+	}
 }
 
 float UChukGaugeComponent::GetSpeedMultiplier() const
@@ -331,9 +368,10 @@ void UChukGaugeComponent::UpdateStages()
 	UpdateGaugeSound(HeartbeatAudio, HeartbeatSound);
 	UpdateGaugeSound(BreathAudio, BreathSound);
 
+	// 정신력이 달리기 제한선을 넘나들 수 있으므로 속도는 매번 다시 계산 (가벼운 계산)
+	ApplySpeed();
 	if (bSanityChanged)
 	{
-		ApplySpeed();
 		OnSanityStageChanged.Broadcast(SanityStage);
 	}
 	if (bFearChanged)
@@ -352,7 +390,10 @@ void UChukGaugeComponent::ApplySpeed()
 	{
 		if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
 		{
-			Move->MaxWalkSpeed = BaseWalkSpeed * GetSpeedMultiplier();
+			// Shift 를 누르고 있어도 정신력이 제한선 이하이면 걷기 속도
+			const bool bActuallyRunning = bRunning && CanRun();
+			Move->MaxWalkSpeed = BaseWalkSpeed * (bActuallyRunning ? RunSpeedMultiplier : 1.f) * GetSpeedMultiplier();
+			Move->MaxWalkSpeedCrouched = BaseWalkSpeed * CrouchSpeedMultiplier * GetSpeedMultiplier();
 		}
 	}
 }
@@ -398,7 +439,19 @@ void UChukGaugeComponent::UpdateGaugeSound(UAudioComponent* Audio, const FChukGa
 	}
 
 	const int32 Stage = GetStageOf(Settings.LinkedGauge);
-	const float Volume = Settings.LinkedGauge == EChukGaugeType::None ? 0.f : GetClampedArrayValue(Settings.VolumeByStage, Stage, 0.f);
+	float Volume = Settings.LinkedGauge == EChukGaugeType::None ? 0.f : GetClampedArrayValue(Settings.VolumeByStage, Stage, 0.f);
+
+	// 시작 기준값 밖이면 소리 없음 (공포: 기준 미만, 정신력: 기준 초과)
+	if (Settings.StartValue >= 0.f)
+	{
+		const bool bInRange = Settings.LinkedGauge == EChukGaugeType::Fear ? Fear >= Settings.StartValue
+			: Settings.LinkedGauge == EChukGaugeType::Sanity ? Sanity <= Settings.StartValue
+			: false;
+		if (!bInRange)
+		{
+			Volume = 0.f;
+		}
+	}
 	const float Pitch = GetClampedArrayValue(Settings.PitchByStage, Stage, 1.f);
 
 	if (Volume <= 0.f)

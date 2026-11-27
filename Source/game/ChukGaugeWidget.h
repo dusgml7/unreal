@@ -15,7 +15,7 @@ class UProgressBar;
  * ■ 위젯 블루프린트 만드는 법
  *   1. Content Browser 우클릭 → User Interface → Widget Blueprint → 부모 클래스로 "ChukGaugeWidget" 선택
  *      (이미 만든 WBP 라면 Graph 탭 → Class Settings → Parent Class 를 ChukGaugeWidget 으로 변경)
- *   2. Designer 에서 Progress Bar 두 개를 놓고 이름을 정확히 "FearBar", "SanityBar" 로 지정 (필수)
+ *   2. Designer 에서 Progress Bar 두 개를 놓고 이름을 정확히 "gauge_fear", "gauge_mentality" 로 지정 (필수)
  *   3. 단계별 색·이미지 변경은 Graph 에서 Event On Fear Stage Display / On Sanity Stage Display 구현
  *
  * 게이지 컴포넌트 연결은 HUD 가 자동으로 해 준다 (Bind To Gauge).
@@ -26,13 +26,13 @@ class GAME_API UChukGaugeWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	/** 공포 게이지 바 (이름 "FearBar" 필수) */
+	/** 공포 게이지 바 (이름 "gauge_fear" 필수) */
 	UPROPERTY(BlueprintReadOnly, Category = "Chuk|UI", meta = (BindWidget))
-	TObjectPtr<UProgressBar> FearBar;
+	TObjectPtr<UProgressBar> gauge_fear;
 
-	/** 정신력 게이지 바 (이름 "SanityBar" 필수) */
+	/** 정신력 게이지 바 (이름 "gauge_mentality" 필수) */
 	UPROPERTY(BlueprintReadOnly, Category = "Chuk|UI", meta = (BindWidget))
-	TObjectPtr<UProgressBar> SanityBar;
+	TObjectPtr<UProgressBar> gauge_mentality;
 
 	/** 표시할 게이지 컴포넌트 연결 */
 	UFUNCTION(BlueprintCallable, Category = "Chuk|UI")

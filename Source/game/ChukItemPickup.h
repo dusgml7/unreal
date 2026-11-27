@@ -7,19 +7,20 @@
 #include "ChukInteractable.h"
 #include "ChukItemPickup.generated.h"
 
-class USphereComponent;
+class UCapsuleComponent;
 class UStaticMeshComponent;
 
 /**
- * 레벨에 놓는 아이템 (등잔, 쥐 사체, 제웅, 일기 두루마리 등)
+ * 레벨에 놓는 줍는 아이템 (등잔, 일기 두루마리)
+ * 쥐 사체·제웅은 줍는 게 아니라 보는 순간 발동하므로 AChukSightHazard 를 쓴다.
  *
  * 플레이어가 Chuk Interact 의 Try Interact 로 상호작용하면 플레이어의 Chuk Inventory 에 Acquire Item 을 호출한다.
  *
  * ■ 블루프린트에서 쓰는 방법
  *   1. Content Browser 우클릭 → Blueprint Class → All Classes 에서 "ChukItemPickup" 선택
- *      → 이름 예: BP_Pickup_OilLamp, BP_Pickup_DeadMouse, BP_Pickup_StrawDoll, BP_Pickup_Diary
+ *      → 이름 예: BP_Pickup_OilLamp, BP_Pickup_Diary
  *   2. Mesh 컴포넌트에 스태틱 메시 지정
- *   3. Class Defaults → Chuk|Pickup 의 Item Id 에 DataTable Row Name 입력 (OilLamp / DeadMouse / StrawDoll / Diary)
+ *   3. Class Defaults → Chuk|Pickup 의 Item Id 에 DataTable Row Name 입력 (item_oillamp / item_diary)
  *   4. 일기 두루마리는 "생성된 곳에 계속 있음" 이므로 Destroy On Pickup 을 끈다.
  *   5. 줍는 소리·이펙트는 이벤트 그래프의 Event On Picked Up 에서 연결.
  *
@@ -43,9 +44,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Pickup")
 	bool bDestroyOnPickup = true;
 
-	/** 상호작용 판정용 구 (트레이스가 여기에 맞으면 상호작용 대상) */
+	/** 상호작용 판정용 캡슐 (트레이스가 여기에 맞으면 상호작용 대상). Shape 에서 Capsule Half Height(세로), Capsule Radius(가로) 조절 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chuk|Pickup")
-	TObjectPtr<USphereComponent> InteractCollision;
+	TObjectPtr<UCapsuleComponent> InteractCollision;
 
 	/** 겉모습 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chuk|Pickup")

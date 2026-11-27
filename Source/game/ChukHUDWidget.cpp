@@ -13,13 +13,13 @@
 
 void UChukHUDWidget::BindToPawn(APawn* Pawn)
 {
-	if (GaugeWidget)
+	if (ui_gauge)
 	{
-		GaugeWidget->BindToGauge(Pawn ? Pawn->FindComponentByClass<UChukGaugeComponent>() : nullptr);
+		ui_gauge->BindToGauge(Pawn ? Pawn->FindComponentByClass<UChukGaugeComponent>() : nullptr);
 	}
-	if (ItemBar)
+	if (ui_itembar)
 	{
-		ItemBar->BindToInventory(Pawn ? Pawn->FindComponentByClass<UChukInventoryComponent>() : nullptr);
+		ui_itembar->BindToInventory(Pawn ? Pawn->FindComponentByClass<UChukInventoryComponent>() : nullptr);
 	}
 
 	if (UChukHideComponent* Old = BoundHide.Get())
@@ -40,8 +40,8 @@ void UChukHUDWidget::BindToPawn(APawn* Pawn)
 
 void UChukHUDWidget::HandleHideCountChanged(int32 Remaining)
 {
-	if (HideCountText)
+	if (ui_hidecount)
 	{
-		HideCountText->SetText(FText::AsNumber(Remaining));
+		ui_hidecount->SetText(FText::AsNumber(Remaining));
 	}
 }

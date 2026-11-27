@@ -3,7 +3,7 @@
 #include "ChukItemPickup.h"
 
 #include "ChukInventoryComponent.h"
-#include "Components/SphereComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 
 AChukItemPickup::AChukItemPickup()
@@ -11,8 +11,8 @@ AChukItemPickup::AChukItemPickup()
 	PrimaryActorTick.bCanEverTick = false;
 
 	// 상호작용 트레이스(Visibility)만 막고 나머지는 통과 → 플레이어가 걸리지 않음
-	InteractCollision = CreateDefaultSubobject<USphereComponent>(TEXT("InteractCollision"));
-	InteractCollision->InitSphereRadius(40.f);
+	InteractCollision = CreateDefaultSubobject<UCapsuleComponent>(TEXT("InteractCollision"));
+	InteractCollision->InitCapsuleSize(40.f, 40.f); // 반지름, 절반 높이 — Shape 의 Capsule Radius / Capsule Half Height 로 조절
 	InteractCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	InteractCollision->SetCollisionResponseToAllChannels(ECR_Ignore);
 	InteractCollision->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);

@@ -7,7 +7,10 @@
 #include "ChukInteractable.h"
 #include "ChukHideSpot.generated.h"
 
+class UAnimationAsset;
 class UArrowComponent;
+class USkeletalMeshComponent;
+class USoundBase;
 class UStaticMeshComponent;
 
 /** 은신처 종류 */
@@ -34,10 +37,14 @@ enum class EChukHideSpotType : uint8
  * ■ 블루프린트에서 쓰는 방법
  *   1. Content Browser 우클릭 → Blueprint Class → All Classes 에서 "ChukHideSpot" 선택
  *      → 이름 예: BP_Hide_Wardrobe, BP_Hide_Jar ...
- *   2. Mesh 에 장롱·항아리 등 메시 지정 (메시 충돌이 있어야 E 키로 상호작용 가능)
+ *   2. 모델 지정 (둘 중 하나, 충돌이 있어야 E 키로 상호작용 가능)
+ *      - Mesh          : 움직이지 않는 Static Mesh (항아리 등)
+ *      - Skeletal Mesh : 문이 열리고 닫히는 Skeletal Mesh (예: KTInteractionPropVol2 의 SK_Closet)
+ *        → Enter / Exit Animation 에 문 애니메이션(ANIM_Closet_Close / ANIM_Closet_Open),
+ *          Enter / Exit Sound 에 소리를 넣으면 들어가고 나올 때 자동 재생
  *   3. Class Defaults → Chuk|Hide 의 Hide Spot Type 선택
  *   4. 뷰포트에서 HidePoint(숨는 위치), ExitPoint(나오는 위치) 화살표를 알맞게 옮긴다.
- *   5. 문 열림 애니메이션·소리는 Event On Player Entered / On Player Exited 에서 연결.
+ *   5. 그 밖의 연출은 Event On Player Entered / On Player Exited 에서 연결.
  */
 UCLASS(Blueprintable)
 class GAME_API AChukHideSpot : public AActor, public IChukInteractable
@@ -66,6 +73,27 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chuk|Hide")
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
+	/** 문이 움직이는 모델(Skeletal Mesh)용. 쓰지 않으면 비워 둔다 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chuk|Hide")
+	TObjectPtr<USkeletalMeshComponent> SkeletalMesh;
+
+	/** 들어갈 때 Skeletal Mesh 에 재생할 애니메이션 (예: ANIM_Closet_Close). 비우면 재생 안 함 */
+	// TODO(기획 확인): 들어갈 때·나올 때 문 연출 (지금은 들어가면 닫힘, 나오면 열림)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Hide|Effect")
+	TObjectPtr<UAnimationAsset> EnterAnimation = nullptr;
+
+	/** 나올 때 Skeletal Mesh 에 재생할 애니메이션 (예: ANIM_Closet_Open). 비우면 재생 안 함 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Hide|Effect")
+	TObjectPtr<UAnimationAsset> ExitAnimation = nullptr;
+
+	/** 들어갈 때 소리 (예: Sound_Closet_Close). 비우면 재생 안 함 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Hide|Effect")
+	TObjectPtr<USoundBase> EnterSound = nullptr;
+
+	/** 나올 때 소리 (예: Sound_Closet_Open). 비우면 재생 안 함 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chuk|Hide|Effect")
+	TObjectPtr<USoundBase> ExitSound = nullptr;
+
 	/** 숨었을 때 캐릭터가 놓이는 위치 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chuk|Hide")
 	TObjectPtr<UArrowComponent> HidePoint;
@@ -89,16 +117,16 @@ public:
 	FVector GetHideLocation() const;
 	FVector GetExitLocation() const;
 
-	/** 플레이어가 들어왔을 때 (문 닫힘 연출 등) */
+	/** 플레이어가 들어왔을 때 (Enter Animation / Sound 외에 추가 연출이 필요하면 여기서) */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Chuk|Hide")
 	void OnPlayerEntered(AActor* Player);
 
-	/** 플레이어가 나갔을 때 (문 열림 연출 등) */
+	/** 플레이어가 나갔을 때 (Exit Animation / Sound 외에 추가 연출이 필요하면 여기서) */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Chuk|Hide")
 	void OnPlayerExited(AActor* Player);
 
-	void NotifyPlayerEntered(AActor* Player) { OnPlayerEntered(Player); }
-	void NotifyPlayerExited(AActor* Player) { OnPlayerExited(Player); }
+	void NotifyPlayerEntered(AActor* Player);
+	void NotifyPlayerExited(AActor* Player);
 
 	// IChukInteractable
 	virtual void Interact_Implementation(AActor* InteractingActor) override;
